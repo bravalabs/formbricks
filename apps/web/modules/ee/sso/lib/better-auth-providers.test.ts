@@ -532,7 +532,12 @@ describe("better-auth SSO providers", () => {
       // Account keying must not move, or existing linked accounts stop matching.
       expect(oidc?.accountIssuer).toBe("local:oauth:openid");
       expect(loggerWarn).toHaveBeenCalledTimes(1);
-      expect(loggerWarn.mock.calls[0][0]).toContain("AZUREAD_CLIENT_ID");
+      // Recommends the dedicated provider, and — like the azuread warning — does not imply the
+      // configured authority has been discarded, since `organizations` keeps restricting sign-in.
+      const message = loggerWarn.mock.calls[0][0] as string;
+      expect(message).toContain("AZUREAD_CLIENT_ID");
+      expect(message).toContain("still applies");
+      expect(message).not.toMatch(/like unset|treated as unset/i);
     });
 
     /**

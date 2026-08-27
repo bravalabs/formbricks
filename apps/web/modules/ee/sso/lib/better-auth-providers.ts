@@ -294,7 +294,7 @@ const azureEndpoints = isAzureTemplateIssuerTenant
 const oidcTemplateIssuerAuthority = microsoftTemplateIssuerAuthority(OIDC_ISSUER);
 if (ENTERPRISE_LICENSE_KEY && OIDC_OAUTH_ENABLED && oidcTemplateIssuerAuthority) {
   logger.warn(
-    `OIDC_ISSUER points at Microsoft's "${oidcTemplateIssuerAuthority}" authority, whose discovery document advertises a placeholder issuer, so id_tokens cannot be verified against it. Skipping discovery for this provider and taking identity from the userinfo endpoint. Prefer the dedicated AZUREAD_CLIENT_ID / AZUREAD_CLIENT_SECRET provider for Microsoft Entra ID.`
+    `OIDC_ISSUER points at Microsoft's "${oidcTemplateIssuerAuthority}" authority, whose discovery document advertises a placeholder issuer, so id_tokens cannot be verified against it. Skipping discovery for this provider and taking identity from the userinfo endpoint; the authority you configured still applies at sign-in. Prefer the dedicated AZUREAD_CLIENT_ID / AZUREAD_CLIENT_SECRET provider for Microsoft Entra ID.`
   );
 }
 const oidcEndpoints = oidcTemplateIssuerAuthority
