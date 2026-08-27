@@ -245,7 +245,7 @@ const microsoftTemplateIssuerAuthority = (issuerUrl: string | undefined): string
     return undefined;
   }
   if (parsed.host.toLowerCase() !== "login.microsoftonline.com") return undefined;
-  const authority = parsed.pathname.split("/").filter(Boolean)[0]?.toLowerCase();
+  const authority = parsed.pathname.split("/").find(Boolean)?.toLowerCase();
   return authority && AZURE_TEMPLATE_ISSUER_TENANTS.has(authority) ? authority : undefined;
 };
 
