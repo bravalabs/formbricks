@@ -479,6 +479,75 @@ describe("better-auth SSO providers", () => {
       });
     });
 
+    /**
+     * ENG-2754: the generic OIDC provider shares ENG-2750's failure mode, because it too resolves its
+     * endpoints from a discovery document. Pointed at a Microsoft multi-tenant authority it would
+     * verify id_tokens against a `{tenantid}` placeholder and fail every sign-in, so those authorities
+     * skip discovery here too — and the operator is told to prefer the dedicated azuread provider.
+     */
+    const oidcBase = {
+      ENTERPRISE_LICENSE_KEY: "lic",
+      OIDC_OAUTH_ENABLED: true,
+      OIDC_CLIENT_ID: "oidc-id",
+      OIDC_CLIENT_SECRET: "oidc-secret",
+    };
+
+    test.each([
+      ["https://login.microsoftonline.com/common/v2.0", "common"],
+      ["https://login.microsoftonline.com/organizations/v2.0", "organizations"],
+      // Case and a trailing slash are operator typing, not a different provider.
+      ["https://LOGIN.microsoftonline.com/Common/", "common"],
+      // No /v2.0 suffix: the authority is the first path segment either way.
+      ["https://login.microsoftonline.com/common", "common"],
+    ])("OIDC pointed at %s skips discovery and uses Microsoft's endpoints", async (issuer, authority) => {
+      const m = await loadProviders({ ...oidcBase, OIDC_ISSUER: issuer });
+      const oidc = m.ssoGenericOAuthConfig.find((c) => c.providerId === "openid");
+
+      expect(oidc?.discoveryUrl).toBeUndefined();
+      expect(oidc?.authorizationUrl).toBe(
+        `https://login.microsoftonline.com/${authority}/oauth2/v2.0/authorize`
+      );
+      expect(oidc?.tokenUrl).toBe(`https://login.microsoftonline.com/${authority}/oauth2/v2.0/token`);
+      expect(oidc?.userInfoUrl).toBe("https://graph.microsoft.com/oidc/userinfo");
+      // Account keying must not move, or existing linked accounts stop matching.
+      expect(oidc?.accountIssuer).toBe("local:oauth:openid");
+      expect(loggerWarn).toHaveBeenCalledTimes(1);
+      expect(loggerWarn.mock.calls[0][0]).toContain("AZUREAD_CLIENT_ID");
+    });
+
+    /**
+     * Everything else keeps discovery. `consumers` is included deliberately: it is a Microsoft
+     * authority but advertises a real issuer, so it must not be swept up with the other two — the same
+     * distinction ENG-2750 turns on. The lookalike host guards against matching on a substring.
+     */
+    test.each([
+      ["a normal IdP", "https://idp.test"],
+      ["Microsoft's personal-accounts authority", "https://login.microsoftonline.com/consumers/v2.0"],
+      [
+        "a concrete Microsoft tenant",
+        "https://login.microsoftonline.com/00000000-1111-2222-3333-444444444444/v2.0",
+      ],
+      ["a lookalike host", "https://login.microsoftonline.com.evil.test/common/v2.0"],
+    ])("OIDC keeps discovery for %s", async (_label, issuer) => {
+      const m = await loadProviders({ ...oidcBase, OIDC_ISSUER: issuer });
+      const oidc = m.ssoGenericOAuthConfig.find((c) => c.providerId === "openid");
+
+      expect(oidc?.discoveryUrl).toBe(`${issuer}/.well-known/openid-configuration`);
+      expect(oidc?.authorizationUrl).toBeUndefined();
+      expect(loggerWarn).not.toHaveBeenCalled();
+    });
+
+    test("OIDC does not warn about a Microsoft authority when the instance is unlicensed", async () => {
+      const m = await loadProviders({
+        ...oidcBase,
+        ENTERPRISE_LICENSE_KEY: undefined,
+        OIDC_ISSUER: "https://login.microsoftonline.com/common/v2.0",
+      });
+
+      expect(m.ssoGenericOAuthConfig.find((c) => c.providerId === "openid")).toBeUndefined();
+      expect(loggerWarn).not.toHaveBeenCalled();
+    });
+
     test("SAML bridges to the local Jackson endpoints and resolves first/last name", async () => {
       const m = await loadProviders({
         ENTERPRISE_LICENSE_KEY: "lic",
